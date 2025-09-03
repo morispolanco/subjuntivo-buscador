@@ -1,10 +1,12 @@
-# app_subjuntivo.py
 import streamlit as st
 import spacy
 import pandas as pd
 from collections import defaultdict
 import re
 import io
+import subprocess
+import sys
+import os
 
 # Configuración de la página
 st.set_page_config(
@@ -13,6 +15,28 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Función para instalar el modelo de spaCy si no está disponible
+def install_spacy_model():
+    try:
+        # Intentar cargar el modelo
+        nlp = spacy.load("es_core_news_sm")
+        return nlp
+    except OSError:
+        # Si no está instalado, instalarlo
+        st.warning("Instalando modelo de spaCy para español... Esto puede tomar un momento.")
+        
+        # Ejecutar el comando de instalación
+        result = subprocess.run([
+            sys.executable, "-m", "spacy", "download", "es_core_news_sm"
+        ], capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            st.success("Modelo instalado correctamente.")
+            return spacy.load("es_core_news_sm")
+        else:
+            st.error(f"Error instalando el modelo: {result.stderr}")
+            return None
 
 # Título de la aplicación
 st.title("🔍 Analizador de Verbos en Subjuntivo")
@@ -25,10 +49,9 @@ y genera un informe detallado en formato Excel.
 class AnalizadorSubjuntivo:
     def __init__(self):
         # Cargar el modelo de spaCy para español
-        try:
-            self.nlp = spacy.load("es_core_news_sm")
-        except OSError:
-            st.error("Modelo de spaCy no encontrado. Ejecuta: `python -m spacy download es_core_news_sm`")
+        self.nlp = install_spacy_model()
+        if self.nlp is None:
+            st.error("No se pudo cargar el modelo de spaCy. La aplicación no puede continuar.")
             st.stop()
         
         # Patrones de verbos irregulares y formas comunes del subjuntivo
@@ -95,6 +118,9 @@ def cargar_analizador():
     return AnalizadorSubjuntivo()
 
 analizador = cargar_analizador()
+
+# Resto del código de tu aplicación Streamlit (sidebar, interfaz, etc.)
+# ... [el resto de tu código permanece igual]
 
 # Sidebar con información
 with st.sidebar:
@@ -232,5 +258,3 @@ with st.expander("💡 ¿Necesitas un texto de ejemplo?"):
     if st.button("Usar texto de ejemplo"):
         st.session_state.texto_ejemplo = texto_ejemplo
         st.rerun()
-
-# Ejecutar con: streamlit run app_subjuntivo.py
