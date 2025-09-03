@@ -1,12 +1,10 @@
 import streamlit as st
 import spacy
 import pandas as pd
-from collections import defaultdict
 import re
 import io
-import subprocess
 import sys
-import os
+from pathlib import Path
 
 # Configuración de la página
 st.set_page_config(
@@ -21,21 +19,29 @@ def install_spacy_model():
     try:
         # Intentar cargar el modelo
         nlp = spacy.load("es_core_news_sm")
+        st.success("Modelo de spaCy cargado correctamente")
         return nlp
     except OSError:
-        # Si no está instalado, instalarlo
-        st.warning("Instalando modelo de spaCy para español... Esto puede tomar un momento.")
+        # Si no está instalado, mostrar instrucciones
+        st.error("""
+        **Modelo de spaCy no encontrado.**
         
-        # Ejecutar el comando de instalación
-        result = subprocess.run([
-            sys.executable, "-m", "spacy", "download", "es_core_news_sm"
-        ], capture_output=True, text=True)
+        Para solucionarlo:
+        1. Asegúrate de que tu archivo `requirements.txt` incluya:
+        ```
+        https://github.com/explosion/spacy-models/releases/download/es_core_news_sm-3.7.0/es_core_news_sm-3.7.0-py3-none-any.whl
+        ```
+        2. Reinicia la aplicación en Streamlit Cloud
+        """)
         
-        if result.returncode == 0:
-            st.success("Modelo instalado correctamente.")
+        # Intentar una solución alternativa
+        try:
+            # Esto funciona en algunos entornos
+            from spacy.cli import download
+            download("es_core_news_sm")
             return spacy.load("es_core_news_sm")
-        else:
-            st.error(f"Error instalando el modelo: {result.stderr}")
+        except:
+            st.stop()
             return None
 
 # Título de la aplicación
@@ -117,11 +123,6 @@ class AnalizadorSubjuntivo:
 def cargar_analizador():
     return AnalizadorSubjuntivo()
 
-analizador = cargar_analizador()
-
-# Resto del código de tu aplicación Streamlit (sidebar, interfaz, etc.)
-# ... [el resto de tu código permanece igual]
-
 # Sidebar con información
 with st.sidebar:
     st.header("ℹ️ Información")
@@ -133,9 +134,22 @@ with st.sidebar:
     - Pluscuamperfecto de subjuntivo (hubiera hablado)
     """)
     
-    st.header("📊 Estadísticas")
     if 'resultados' in st.session_state:
+        st.header("📊 Estadísticas")
         st.metric("Verbos encontrados", len(st.session_state.resultados))
+
+# Cargar el analizador
+try:
+    analizador = cargar_analizador()
+except Exception as e:
+    st.error(f"Error al cargar el analizador: {e}")
+    st.info("""
+    **Solución:** Asegúrate de que el archivo `requirements.txt` contiene:
+    ```
+    https://github.com/explosion/spacy-models/releases/download/es_core_news_sm-3.7.0/es_core_news_sm-3.7.0-py3-none-any.whl
+    ```
+    """)
+    st.stop()
 
 # Selección de modo de entrada
 modo_entrada = st.radio(
@@ -166,10 +180,12 @@ else:
 if st.button("🔍 Analizar texto", type="primary"):
     if texto_analizar.strip():
         with st.spinner("Analizando texto..."):
-            resultados = analizador.analizar_texto(texto_analizar)
-            st.session_state.resultados = resultados
-            
-        st.success(f"Análisis completado. Se encontraron {len(resultados)} verbos en subjuntivo.")
+            try:
+                resultados = analizador.analizar_texto(texto_analizar)
+                st.session_state.resultados = resultados
+                st.success(f"Análisis completado. Se encontraron {len(resultados)} verbos en subjuntivo.")
+            except Exception as e:
+                st.error(f"Error durante el análisis: {e}")
     else:
         st.warning("Por favor, ingresa algún texto para analizar.")
 
